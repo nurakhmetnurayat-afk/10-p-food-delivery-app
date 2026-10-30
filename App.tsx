@@ -4,7 +4,7 @@ import { StyleSheet, Text, View, TextInput, ScrollView, TouchableOpacity, Button
 export default function App() {
   // Состояние для поиска
   const [search, setSearch] = useState('');
-  // Состояние для количества товаров в корзине
+  // количества товаров в корзине
   const [cartCount, setCartCount] = useState(0);
 
   return (
