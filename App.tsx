@@ -7,7 +7,7 @@ export default function App() {
   // количества товаров в корзине
   const [cartCount, setCartCount] = useState(0);
 
-  return (
+  return 
     <View style={styles.container}>
       {/* Шапка */}
       <View style={styles.header}>
