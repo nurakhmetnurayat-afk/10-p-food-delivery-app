@@ -1,13 +1,10 @@
 import { Stack } from 'expo-router';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { CartProvider } from '../constants/cartcontext';
 
 export default function RootLayout() {
   return (
-    <SafeAreaProvider>
-      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-        <Stack.Screen name="index" options={{ animation: 'fade' }} />
-        <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
-      </Stack>
-    </SafeAreaProvider>
+    <CartProvider>
+      <Stack screenOptions={{ headerShown: false }} />
+    </CartProvider>
   );
 }
