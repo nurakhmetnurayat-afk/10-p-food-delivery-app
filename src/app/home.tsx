@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, ScrollView, TouchableOpacity, Button } from 'react-native';
+import { StyleSheet, Text, View, TextInput, ScrollView, TouchableOpacity } from 'react-native';
 
-export default function App() {
+export default function Home() {
   // Состояние для поиска
   const [search, setSearch] = useState('');
   // количества товаров в корзине
   const [cartCount, setCartCount] = useState(0);
 
-  return 
+  return (
     <View style={styles.container}>
       {/* Шапка */}
       <View style={styles.header}>
