@@ -5,19 +5,36 @@ import AuthLayout from '@/components/AuthLayout';
 import Button from '@/components/Button';
 import Input from '@/components/Input';
 import SocialButtons from '@/components/SocialButtons';
+import { errorText } from '@/api/client';
+import { useAuth } from '@/constants/authcontext';
 import { colors } from '@/constants/theme';
 import { emailError, passwordError } from '@/constants/validation';
+import { CHEF_HOME } from '@/constants/routes';
 
 export default function Login() {
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [remember, setRemember] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [serverError, setServerError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const submit = () => {
+  const submit = async () => {
     const next = { email: emailError(email), password: passwordError(password) };
     setErrors(next);
-    if (!next.email && !next.password) router.replace('/location');
+    setServerError('');
+    if (next.email || next.password) return;
+    setLoading(true);
+    try {
+      const user = await login(email.trim(), password);
+      if (user.role === 'chef') router.replace(CHEF_HOME);
+      else router.replace(user.address ? '/home' : '/location');
+    } catch (e) {
+      setServerError(errorText(e));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -39,6 +56,7 @@ export default function Login() {
         value={password}
         onChangeText={setPassword}
         error={errors.password}
+        onSubmitEditing={submit}
       />
       <View style={styles.row}>
         <Pressable style={styles.check} onPress={() => setRemember((v) => !v)} hitSlop={6}>
@@ -49,7 +67,8 @@ export default function Login() {
           Забыли пароль?
         </Link>
       </View>
-      <Button title="Войти" onPress={submit} />
+      {!!serverError && <Text style={styles.serverError}>{serverError}</Text>}
+      <Button title={loading ? 'Входим…' : 'Войти'} onPress={submit} disabled={loading} />
       <View style={styles.footer}>
         <Text style={styles.footerText}>Нет аккаунта?</Text>
         <Link href="/signup" style={[styles.link, styles.upper]}>
@@ -67,7 +86,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: -4,
-    marginBottom: 28,
+    marginBottom: 24,
   },
   check: {
     flexDirection: 'row',
@@ -103,6 +122,12 @@ const styles = StyleSheet.create({
   },
   upper: {
     textTransform: 'uppercase',
+  },
+  serverError: {
+    color: colors.error,
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 14,
   },
   footer: {
     flexDirection: 'row',

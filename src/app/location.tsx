@@ -1,10 +1,14 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { api } from '@/api/client';
+import { useAuth } from '@/constants/authcontext';
+import { useCart } from '@/constants/cartcontext';
 import { colors, radius } from '@/constants/theme';
+import { notify } from '@/utils/dialog';
 
 function MapArt() {
   return (
@@ -21,23 +25,42 @@ function MapArt() {
   );
 }
 
+async function detectAddress(): Promise<string | null> {
+  const { status } = await Location.requestForegroundPermissionsAsync();
+  if (status !== 'granted') return null;
+  const { coords } = await Location.getCurrentPositionAsync({});
+  if (Platform.OS === 'web') return null;
+  const [place] = await Location.reverseGeocodeAsync(coords);
+  if (!place) return null;
+  const street = [place.street, place.streetNumber].filter(Boolean).join(', ');
+  return [street || place.name, place.city].filter(Boolean).join(', ') || null;
+}
+
 export default function LocationAccess() {
   const insets = useSafeAreaInsets();
+  const { user, updateProfile } = useAuth();
+  const { setAddress } = useCart();
   const [loading, setLoading] = useState(false);
+
+  const manual = () => router.replace({ pathname: '/address-form', params: { first: '1' } });
 
   const request = async () => {
     setLoading(true);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        await Location.getCurrentPositionAsync({});
-        router.replace('/home');
-      } else {
-        Alert.alert('Нет доступа', 'Адрес доставки можно будет указать вручную');
-        router.replace('/home');
+      const found = await detectAddress();
+      if (!found) {
+        notify('Адрес не определён', 'Укажите адрес доставки вручную');
+        manual();
+        return;
       }
-    } catch {
+      setAddress(found);
+      if (user) {
+        await api.post('/addresses', { label: 'home', street: found });
+        if (!user.address) await updateProfile({ address: found });
+      }
       router.replace('/home');
+    } catch {
+      manual();
     } finally {
       setLoading(false);
     }
@@ -66,7 +89,7 @@ export default function LocationAccess() {
         )}
       </Pressable>
       <Text style={styles.note}>FoodGo использует геолокацию только во время работы приложения, чтобы найти рестораны рядом</Text>
-      <Pressable onPress={() => router.replace('/home')} hitSlop={8}>
+      <Pressable onPress={manual} hitSlop={8}>
         <Text style={styles.manual}>Указать адрес вручную</Text>
       </Pressable>
     </View>

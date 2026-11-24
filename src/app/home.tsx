@@ -1,275 +1,284 @@
-import React, { useMemo, useState } from 'react';
-import {
-  FlatList,
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { CATEGORIES, DISHES, Dish } from '../constants/menu';
-import { useCart } from '../constants/cartcontext';
+import { useEffect, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { Category, Order, Promo, Restaurant } from '@/api/types';
+import { api } from '@/api/client';
+import { RestaurantCard } from '@/components/cards';
+import { Chip, CircleButton, ErrorState, Loading, Screen, SectionTitle } from '@/components/ui';
+import { useAuth } from '@/constants/authcontext';
+import { useCart } from '@/constants/cartcontext';
+import { colors, money, radius } from '@/constants/theme';
+import { useApi } from '@/hooks/useApi';
+
+let offerShown = false;
+
+const greeting = () => {
+  const h = new Date().getHours();
+  if (h < 5) return 'Доброй ночи';
+  if (h < 12) return 'Доброе утро';
+  if (h < 18) return 'Добрый день';
+  return 'Добрый вечер';
+};
 
 export default function HomeScreen() {
-  const router = useRouter();
-  const { items, address, addToCart, updateQuantity, totalCount, totalPrice } = useCart();
+  const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const { address, setAddress, totalCount, totalPrice, setPromo } = useCart();
+  const categories = useApi<Category[]>('/categories');
+  const restaurants = useApi<Restaurant[]>('/restaurants', { refetchOnFocus: true });
+  const [offer, setOffer] = useState(false);
 
-  const [selectedCategory, setSelectedCategory] = useState<string>('Все');
-  const [search, setSearch] = useState('');
+  useEffect(() => {
+    if (!address && user?.address) setAddress(user.address);
+  }, [address, user, setAddress]);
 
-  const filteredDishes = useMemo(() => {
-    return DISHES.filter((item) => {
-      const matchCategory =
-        selectedCategory === 'Все' || item.category === selectedCategory;
-      const q = search.trim().toLowerCase();
-      const matchSearch =
-        !q ||
-        item.name.toLowerCase().includes(q) ||
-        item.restaurant.toLowerCase().includes(q);
-      return matchCategory && matchSearch;
-    });
-  }, [selectedCategory, search]);
+  useEffect(() => {
+    if (offerShown || !user) return;
+    api
+      .get<Order[]>('/orders')
+      .then((orders) => {
+        if (orders.length === 0 && !offerShown) {
+          offerShown = true;
+          setTimeout(() => setOffer(true), 700);
+        }
+      })
+      .catch(() => {});
+  }, [user]);
 
-  const getItemQuantity = (id: string) =>
-    items.find((i) => i.dish.id === id)?.quantity ?? 0;
-
-  const renderDish = ({ item }: { item: Dish }) => {
-    const qty = getItemQuantity(item.id);
-
-    return (
-      <View style={styles.card}>
-        <View style={styles.emojiBox}>
-          <Text style={styles.emoji}>{item.emoji}</Text>
-        </View>
-
-        <View style={styles.cardBody}>
-          <View style={styles.cardTop}>
-            <Text style={styles.restaurant}>{item.restaurant}</Text>
-            <Text style={styles.meta}>★ {item.rating} · {item.deliveryTime}</Text>
-          </View>
-
-          <Text style={styles.dishName}>{item.name}</Text>
-          <Text style={styles.description} numberOfLines={2}>
-            {item.description}
-          </Text>
-
-          <View style={styles.cardFooter}>
-            <Text style={styles.price}>{item.price} ₸</Text>
-
-            {qty === 0 ? (
-              <Pressable style={styles.addBtn} onPress={() => addToCart(item)}>
-                <Text style={styles.addBtnText}>+ В корзину</Text>
-              </Pressable>
-            ) : (
-              <View style={styles.counter}>
-                <Pressable
-                  style={styles.counterBtn}
-                  onPress={() => updateQuantity(item.id, -1)}
-                >
-                  <Text style={styles.counterSign}>−</Text>
-                </Pressable>
-                <Text style={styles.counterValue}>{qty}</Text>
-                <Pressable
-                  style={styles.counterBtn}
-                  onPress={() => updateQuantity(item.id, 1)}
-                >
-                  <Text style={styles.counterSign}>+</Text>
-                </Pressable>
-              </View>
-            )}
-          </View>
-        </View>
-      </View>
-    );
+  const takeOffer = async () => {
+    setOffer(false);
+    try {
+      setPromo(await api.get<Promo>('/promos/FOODGO25'));
+    } catch {}
   };
 
+  const firstName = user?.name.split(' ')[0] ?? 'гость';
+
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
-        {/* Шапка с адресом */}
-        <View style={styles.header}>
-          <Pressable onPress={() => router.push('/location')}>
-            <Text style={styles.addressLabel}>Адрес доставки ▾</Text>
-            <Text style={styles.addressValue}>{address}</Text>
+    <Screen>
+      <StatusBar style="dark" />
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + (totalCount ? 110 : 30) }]} showsVerticalScrollIndicator={false}>
+        <View style={styles.top}>
+          <CircleButton icon="☰" onPress={() => router.push('/profile')} label="Меню" />
+          <Pressable style={styles.deliver} onPress={() => router.push('/addresses')}>
+            <Text style={styles.deliverLabel}>ДОСТАВИТЬ В</Text>
+            <Text style={styles.deliverValue} numberOfLines={1}>
+              {address || 'Укажите адрес'} ▾
+            </Text>
           </Pressable>
-
-          <Pressable
-            style={styles.cartBadgeBtn}
-            onPress={() => router.push('/cart')}
-          >
-            <Text style={styles.cartBadgeText}>🛒 {totalCount}</Text>
-          </Pressable>
+          <CircleButton icon="🛍" dark badge={totalCount} onPress={() => router.push('/cart')} label="Корзина" />
         </View>
 
-        {/* Поиск */}
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Найти блюдо или ресторан..."
-          placeholderTextColor="#8E8E93"
-          value={search}
-          onChangeText={setSearch}
-        />
+        <Text style={styles.hello}>
+          Привет, {firstName}, <Text style={styles.helloBold}>{greeting()}!</Text>
+        </Text>
 
-        {/* Категории */}
-        <View style={styles.categoriesWrap}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {CATEGORIES.map((cat) => {
-              const active = cat === selectedCategory;
-              return (
-                <Pressable
-                  key={cat}
-                  style={[styles.chip, active && styles.chipActive]}
-                  onPress={() => setSelectedCategory(cat)}
-                >
-                  <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                    {cat}
-                  </Text>
-                </Pressable>
-              );
-            })}
+        <Pressable style={styles.search} onPress={() => router.push('/search')}>
+          <Text style={styles.searchIcon}>⌕</Text>
+          <Text style={styles.searchText}>Найти блюдо или ресторан</Text>
+        </Pressable>
+
+        <SectionTitle title="Все категории" action="Все" onAction={() => router.push('/categories')} />
+        {categories.loading ? null : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips}>
+            <Chip label="Все" emoji="🔥" active onPress={() => router.push('/categories')} />
+            {categories.data?.map((c) => (
+              <Chip
+                key={c.id}
+                label={c.name}
+                emoji={c.emoji}
+                onPress={() => router.push({ pathname: '/category/[id]', params: { id: c.id } })}
+              />
+            ))}
           </ScrollView>
-        </View>
-
-        {/* Список блюд */}
-        <FlatList
-          data={filteredDishes}
-          keyExtractor={(item) => item.id}
-          renderItem={renderDish}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <Text style={styles.emptyText}>Ничего не найдено</Text>
-          }
-        />
-
-        {/* Нижняя плашка корзины */}
-        {totalCount > 0 && (
-          <Pressable
-            style={styles.bottomBar}
-            onPress={() => router.push('/cart')}
-          >
-            <Text style={styles.bottomBarTitle}>Корзина ({totalCount})</Text>
-            <Text style={styles.bottomBarPrice}>{totalPrice} ₸ →</Text>
-          </Pressable>
         )}
-      </View>
-    </SafeAreaView>
+
+        <SectionTitle title="Открытые рестораны" action="Все" onAction={() => router.push('/search')} />
+        {restaurants.loading ? (
+          <Loading />
+        ) : restaurants.error ? (
+          <ErrorState message={restaurants.error} onRetry={() => restaurants.reload()} />
+        ) : (
+          restaurants.data?.map((r) => <RestaurantCard key={r.id} restaurant={r} />)
+        )}
+      </ScrollView>
+
+      {totalCount > 0 && (
+        <Pressable style={[styles.bottomBar, { bottom: insets.bottom + 16 }]} onPress={() => router.push('/cart')}>
+          <Text style={styles.bottomBarTitle}>Корзина · {totalCount}</Text>
+          <Text style={styles.bottomBarPrice}>{money(totalPrice)} →</Text>
+        </Pressable>
+      )}
+
+      <Modal visible={offer} transparent animationType="fade" onRequestClose={() => setOffer(false)}>
+        <View style={styles.overlay}>
+          <View style={styles.offer}>
+            <Pressable style={styles.offerClose} onPress={() => setOffer(false)} hitSlop={10} accessibilityLabel="Закрыть">
+              <Text style={styles.offerCloseText}>✕</Text>
+            </Pressable>
+            <Text style={styles.offerSpark}>✦ ✧ ✦</Text>
+            <Text style={styles.offerTitle}>Горячее{'\n'}предложение!</Text>
+            <Text style={styles.offerCode}>#FOODGO25</Text>
+            <Text style={styles.offerText}>Скидка 25% на первый заказ по этому промокоду</Text>
+            <Pressable style={styles.offerBtn} onPress={takeOffer}>
+              <Text style={styles.offerBtnText}>ЗАБРАТЬ СКИДКУ</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F7F8FA' },
-  container: { flex: 1, paddingHorizontal: 16, paddingTop: 12 },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
+  content: {
+    paddingHorizontal: 24,
+    paddingTop: 12,
   },
-  addressLabel: { fontSize: 12, color: '#6B7280' },
-  addressValue: { fontSize: 16, fontWeight: '700', color: '#111827', marginTop: 2 },
-  cartBadgeBtn: {
-    backgroundColor: '#111827',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  cartBadgeText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
-  searchInput: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: '#111827',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginBottom: 12,
-  },
-  categoriesWrap: { marginBottom: 12 },
-  chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginRight: 8,
-  },
-  chipActive: { backgroundColor: '#16A34A', borderColor: '#16A34A' },
-  chipText: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  chipTextActive: { color: '#FFFFFF' },
-  listContent: { paddingBottom: 90 },
-  card: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-  },
-  emojiBox: {
-    width: 72,
-    height: 72,
-    borderRadius: 14,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  emoji: { fontSize: 36 },
-  cardBody: { flex: 1 },
-  cardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  restaurant: { fontSize: 12, fontWeight: '600', color: '#16A34A' },
-  meta: { fontSize: 12, color: '#6B7280' },
-  dishName: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 4 },
-  description: { fontSize: 13, color: '#6B7280', marginBottom: 10 },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  price: { fontSize: 16, fontWeight: '800', color: '#111827' },
-  addBtn: {
-    backgroundColor: '#16A34A',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 10,
-  },
-  addBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
-  counter: {
+  top: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
+    gap: 16,
   },
-  counterBtn: { paddingHorizontal: 10, paddingVertical: 2 },
-  counterSign: { fontSize: 18, fontWeight: '700', color: '#111827' },
-  counterValue: { fontSize: 15, fontWeight: '700', marginHorizontal: 6 },
-  emptyText: { textAlign: 'center', color: '#6B7280', marginTop: 40, fontSize: 15 },
+  deliver: {
+    flex: 1,
+  },
+  deliverLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  deliverValue: {
+    fontSize: 14,
+    color: '#676767',
+    marginTop: 2,
+  },
+  hello: {
+    fontSize: 16,
+    color: colors.dark,
+    marginTop: 24,
+  },
+  helloBold: {
+    fontWeight: '700',
+  },
+  search: {
+    marginTop: 16,
+    height: 62,
+    borderRadius: radius.sm,
+    backgroundColor: '#F6F6F6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    gap: 12,
+  },
+  searchIcon: {
+    fontSize: 22,
+    color: '#A0A5BA',
+  },
+  searchText: {
+    fontSize: 14,
+    color: '#676767',
+  },
+  chips: {
+    marginHorizontal: -24,
+    paddingLeft: 24,
+  },
   bottomBar: {
     position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: 20,
-    backgroundColor: '#16A34A',
+    left: 24,
+    right: 24,
+    backgroundColor: colors.primary,
     borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+    paddingVertical: 18,
+    paddingHorizontal: 22,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  bottomBarTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
-  bottomBarPrice: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+  bottomBarTitle: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  bottomBarPrice: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(18,18,35,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  offer: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: 35,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 28,
+    paddingTop: 40,
+    paddingBottom: 30,
+    alignItems: 'center',
+  },
+  offerClose: {
+    position: 'absolute',
+    top: -14,
+    right: -10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFE194',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  offerCloseText: {
+    color: colors.primary,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  offerSpark: {
+    color: '#FFE194',
+    fontSize: 18,
+    letterSpacing: 8,
+  },
+  offerTitle: {
+    color: colors.white,
+    fontSize: 34,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  offerCode: {
+    color: colors.white,
+    fontSize: 24,
+    fontWeight: '700',
+    marginTop: 24,
+  },
+  offerText: {
+    color: colors.white,
+    fontSize: 15,
+    textAlign: 'center',
+    marginTop: 14,
+    lineHeight: 22,
+  },
+  offerBtn: {
+    marginTop: 26,
+    width: '100%',
+    height: 58,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  offerBtnText: {
+    color: colors.white,
+    fontWeight: '700',
+    fontSize: 15,
+    letterSpacing: 0.6,
+  },
 });

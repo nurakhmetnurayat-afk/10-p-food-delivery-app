@@ -1,23 +1,33 @@
-import { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Animated, Platform, StyleSheet, View } from 'react-native';
+import { useAuth } from '@/constants/authcontext';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import Logo from '@/components/Logo';
 import Rays from '@/components/Rays';
 import { colors } from '@/constants/theme';
+import { CHEF_HOME } from '@/constants/routes';
 
 export default function Splash() {
-  const logo = useRef(new Animated.Value(0)).current;
-  const rays = useRef(new Animated.Value(0)).current;
+  const [logo] = useState(() => new Animated.Value(0));
+  const [rays] = useState(() => new Animated.Value(0));
+  const { user, ready } = useAuth();
+  const [shown, setShown] = useState(false);
 
   useEffect(() => {
     Animated.sequence([
-      Animated.spring(logo, { toValue: 1, friction: 6, useNativeDriver: true }),
-      Animated.timing(rays, { toValue: 1, duration: 500, useNativeDriver: true }),
+      Animated.spring(logo, { toValue: 1, friction: 6, useNativeDriver: Platform.OS !== 'web' }),
+      Animated.timing(rays, { toValue: 1, duration: 500, useNativeDriver: Platform.OS !== 'web' }),
     ]).start();
-    const timer = setTimeout(() => router.replace('/onboarding'), 2200);
+    const timer = setTimeout(() => setShown(true), 2000);
     return () => clearTimeout(timer);
   }, [logo, rays]);
+
+  useEffect(() => {
+    if (!shown || !ready) return;
+    if (!user) router.replace('/onboarding');
+    else router.replace(user.role === 'chef' ? CHEF_HOME : '/home');
+  }, [shown, ready, user]);
 
   return (
     <View style={styles.root}>
