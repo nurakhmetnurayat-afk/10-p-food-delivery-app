@@ -1,6 +1,24 @@
 # FoodGo — доставка еды
 
-Мобильное приложение на Expo (React Native, TypeScript) и собственный API-сервер на Node.js + Express.
+Мобильное приложение на **React Native** (Expo) и собственный API-сервер на Node.js + Express.
+
+## Технологии
+
+| Часть | Технология |
+|---|---|
+| Мобильное приложение | **React Native 0.88** + **Expo SDK 58** |
+| Язык | **TypeScript** — файлы `.tsx` (React Native компоненты с JSX) и `.ts` |
+| Навигация | Expo Router (`src/app/`, файл = экран) |
+| API-сервер | Node.js + Express 5 на TypeScript (`server/`) |
+| Проверки | ESLint (`eslint-config-expo`), TypeScript |
+
+`.tsx` — это обычный React Native код на TypeScript, а не отдельный язык. Компоненты импортируются из `react-native`:
+
+```tsx
+import { View, Text, Pressable, FlatList } from 'react-native';
+```
+
+GitHub показывает в языках «TypeScript», потому что React Native — это фреймворк, а код в нём пишут на JavaScript (`.jsx`) или TypeScript (`.tsx`). Шаблон проекта изначально создан на TypeScript (Expo blank-typescript).
 
 ## Запуск
 
