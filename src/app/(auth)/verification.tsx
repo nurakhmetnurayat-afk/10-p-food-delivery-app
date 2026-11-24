@@ -3,16 +3,21 @@ import { Pressable, StyleSheet, Text, TextInput, TextInputInstance, View } from 
 import { router, useLocalSearchParams } from 'expo-router';
 import AuthLayout from '@/components/AuthLayout';
 import Button from '@/components/Button';
+import { api, errorText } from '@/api/client';
 import { colors, radius } from '@/constants/theme';
 
 const LENGTH = 4;
 const RESEND_SECONDS = 50;
 
 export default function Verification() {
-  const { email } = useLocalSearchParams<{ email?: string }>();
+  const params = useLocalSearchParams<{ email: string; devCode?: string }>();
+  const email = params.email ?? '';
+  const [devCode, setDevCode] = useState(params.devCode ?? '');
   const [code, setCode] = useState<string[]>(Array(LENGTH).fill(''));
   const [seconds, setSeconds] = useState(RESEND_SECONDS);
   const [focused, setFocused] = useState(0);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const inputs = useRef<(TextInputInstance | null)[]>([]);
 
   useEffect(() => {
@@ -22,6 +27,7 @@ export default function Verification() {
   }, [seconds]);
 
   const change = (value: string, i: number) => {
+    setError('');
     const digits = value.replace(/\D/g, '');
     const next = [...code];
     if (!digits) {
@@ -41,10 +47,29 @@ export default function Verification() {
     if (key === 'Backspace' && !code[i] && i > 0) inputs.current[i - 1]?.focus();
   };
 
-  const resend = () => {
-    setCode(Array(LENGTH).fill(''));
-    setSeconds(RESEND_SECONDS);
-    inputs.current[0]?.focus();
+  const resend = async () => {
+    try {
+      const res = await api.post<{ devCode: string }>('/auth/forgot', { email });
+      setDevCode(res.devCode);
+      setCode(Array(LENGTH).fill(''));
+      setSeconds(RESEND_SECONDS);
+      inputs.current[0]?.focus();
+    } catch (e) {
+      setError(errorText(e));
+    }
+  };
+
+  const submit = async () => {
+    const value = code.join('');
+    setLoading(true);
+    try {
+      await api.post('/auth/verify', { email, code: value });
+      router.replace({ pathname: '/reset-password', params: { email, code: value } });
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const complete = code.every(Boolean);
@@ -55,7 +80,7 @@ export default function Verification() {
       subtitle={
         <>
           Мы отправили код на почту{'\n'}
-          <Text style={styles.email}>{email || 'example@gmail.com'}</Text>
+          <Text style={styles.email}>{email}</Text>
         </>
       }
     >
@@ -86,11 +111,19 @@ export default function Verification() {
             maxLength={LENGTH}
             autoFocus={i === 0}
             selectTextOnFocus
-            style={[styles.cell, focused === i && styles.cellFocused, !!digit && styles.cellFilled]}
+            style={[styles.cell, focused === i && styles.cellFocused, !!digit && styles.cellFilled, !!error && styles.cellError]}
           />
         ))}
       </View>
-      <Button title="Подтвердить" onPress={() => router.replace('/location')} disabled={!complete} />
+      {!!error && <Text style={styles.error}>{error}</Text>}
+      {!!devCode && (
+        <View style={styles.devBox}>
+          <Text style={styles.devText}>
+            Демо-режим: почтовый сервис не подключён, поэтому код показываем здесь — <Text style={styles.bold}>{devCode}</Text>
+          </Text>
+        </View>
+      )}
+      <Button title={loading ? 'Проверяем…' : 'Подтвердить'} onPress={submit} disabled={!complete || loading} />
     </AuthLayout>
   );
 }
@@ -127,7 +160,7 @@ const styles = StyleSheet.create({
   cells: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 32,
+    marginBottom: 20,
   },
   cell: {
     width: 64,
@@ -147,5 +180,25 @@ const styles = StyleSheet.create({
   },
   cellFilled: {
     backgroundColor: colors.primarySoft,
+  },
+  cellError: {
+    borderColor: colors.error,
+  },
+  error: {
+    color: colors.error,
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 14,
+  },
+  devBox: {
+    backgroundColor: colors.field,
+    borderRadius: radius.sm,
+    padding: 12,
+    marginBottom: 20,
+  },
+  devText: {
+    fontSize: 13,
+    color: colors.subtle,
+    lineHeight: 19,
   },
 });
