@@ -145,6 +145,32 @@ const cardBrand = (num: string) => {
   return 'Карта';
 };
 
+type RouteLayer = { route?: { path: string; methods: Record<string, boolean> } };
+
+app.get('/', (req, res) => {
+  const stack = (app.router as unknown as { stack: RouteLayer[] }).stack;
+  const endpoints = stack
+    .filter((l) => l.route?.path.startsWith('/api'))
+    .map((l) => `${Object.keys(l.route?.methods ?? {}).join(', ').toUpperCase()} ${l.route?.path}`);
+  res.type('json').send(
+    JSON.stringify(
+      {
+        name: 'FoodGo API',
+        status: 'работает',
+        stack: 'Node.js + Express 5 + TypeScript',
+        restaurants: restaurants.length,
+        dishes: allDishes().length,
+        users: db.users.filter((u) => u.role === 'customer').length,
+        orders: db.orders.length,
+        endpointsCount: endpoints.length,
+        endpoints,
+      },
+      null,
+      2,
+    ),
+  );
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ ok: true });
 });
