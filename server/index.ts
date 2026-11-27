@@ -720,7 +720,16 @@ app.use((req, res) => {
   fail(res, 404, 'Не найдено');
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', (error?: Error) => {
+  if (error) {
+    const busy = (error as NodeJS.ErrnoException).code === 'EADDRINUSE';
+    console.error(
+      busy
+        ? `Порт ${PORT} уже занят. Возможно, сервер FoodGo уже запущен в другом терминале — проверьте http://localhost:${PORT}/api/health или закройте другой процесс.`
+        : `Не удалось запустить сервер: ${error.message}`,
+    );
+    process.exit(1);
+  }
   const ips = Object.values(os.networkInterfaces())
     .flat()
     .filter((n) => n && n.family === 'IPv4' && !n.internal)
